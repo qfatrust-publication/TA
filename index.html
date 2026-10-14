@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="bn"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>টিচার্স সাপোর্ট সেন্টার</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600&family=Amiri&display=swap" rel="stylesheet">
+<style>
+:root{--g:#0f5b3a;--bg:#eef3f0;--c:#fff;--t:#16241c;--m:#5b6b62;--l:#d3dfd8;--r:#a32626}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.75 'Noto Sans Bengali','Amiri',sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--g);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;position:sticky;top:0;z-index:5}
+header a,header button{color:#fff;font-size:14px;text-decoration:none;background:none;border:0;cursor:pointer;padding:2px 0;font-family:inherit}
+header .b{font-weight:600;font-size:17px;margin-right:auto}
+main{max-width:720px;margin:0 auto;padding:16px}
+.crumb{font-size:14px;color:var(--m);margin-bottom:6px}.crumb a{color:var(--g)}
+h1{font-size:23px;line-height:1.4;margin:4px 0 14px}
+.card{display:flex;align-items:center;gap:8px;background:var(--c);border:1px solid var(--l);border-radius:8px;padding:12px 14px;margin-bottom:8px}
+.card a{flex:1;color:var(--t);text-decoration:none;font-weight:600}
+.card small{color:var(--m);font-weight:400}
+.sec{background:var(--c);border-left:4px solid var(--g);padding:10px 14px;margin:0 0 12px;border-radius:0 8px 8px 0}
+.sec h3{margin:0 0 4px;font-size:16px;color:var(--g)}
+.sec p{margin:0;white-space:pre-wrap;font-size:17px}
+.sec.empty p{color:var(--m);font-style:italic}
+button,input,textarea{font:inherit}
+.btn,dialog button{background:var(--g);color:#fff;border:0;border-radius:6px;padding:7px 14px;cursor:pointer}
+.btn.o,dialog button.o{background:none;color:var(--g);border:1px solid var(--g)}
+a.btn{text-decoration:none;display:inline-block}
+.ic{background:none;border:0;cursor:pointer;color:var(--m);padding:2px 6px}.ic.d{color:var(--r)}
+input,textarea{width:100%;padding:9px 11px;border:1px solid var(--l);border-radius:6px;background:#fff;color:var(--t);margin:0 0 10px}
+label{font-size:14px;color:var(--m);display:block}
+.form{background:var(--c);border:1px solid var(--l);border-radius:10px;padding:18px;max-width:440px;margin:24px auto}
+.err{color:var(--r);font-size:14px;min-height:20px}
+.tabs{display:flex;gap:16px;margin-bottom:14px}.tabs a{color:var(--m);text-decoration:none;padding-bottom:3px}.tabs a.on{color:var(--g);border-bottom:2px solid var(--g);font-weight:600}
+dialog{border:0;border-radius:10px;padding:18px;width:min(560px,94vw);max-height:90vh}
+dialog::backdrop{background:#0008}
+.row{display:flex;gap:8px;margin-top:6px}
+.sx{border:1px dashed var(--l);border-radius:8px;padding:10px 10px 2px;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:14px;background:var(--c)}td,th{border:1px solid var(--l);padding:6px 8px;text-align:left;vertical-align:top}
+:focus-visible{outline:2px solid var(--g);outline-offset:2px}
+</style></head><body>
+<header id="hd"></header><main id="app"></main><dialog id="dlg"></dialog>
+<script type="module">
+import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,sendPasswordResetEmail}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import{initializeFirestore,persistentLocalCache,collection,doc,getDoc,setDoc,addDoc,updateDoc,deleteDoc,getDocs,query,where,limit,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// ===== আপনার Firebase কনফিগ এখানে বসান =====
+const CFG={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT",appId:"YOUR_APP_ID"};
+// =============================================
+
+const app=initializeApp(CFG),auth=getAuth(app),db=initializeFirestore(app,{localCache:persistentLocalCache()});
+const T=['book','unit','lesson','tadrib'],L={book:'বই',unit:'অধ্যায় (ইউনিট)',lesson:'লেসন',tadrib:'তাদরিব'};
+const DEF=['লক্ষ্য-উদ্দেশ্য','পড়ানোর কৌশল','উত্তর','সাধারণ ভুল'];
+const ER={'auth/invalid-credential':'ইমেইল বা পাসওয়ার্ড ভুল।','auth/email-already-in-use':'এই ইমেইল আগেই নিবন্ধিত।','auth/weak-password':'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।','auth/invalid-email':'ইমেইল সঠিক নয়।','permission-denied':'এই কাজের অনুমতি নেই।'};
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const msg=e=>ER[e.code]||'সমস্যা হয়েছে: '+(e.code||e.message);
+let me=null,prof={},adm=false,edit=true,ready=false;
+
+const kids=async p=>(await getDocs(query(collection(db,'items'),where('p','==',p)))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.o||0)-(b.o||0));
+const get=async id=>{const s=await getDoc(doc(db,'items',id));return s.exists()?{id,...s.data()}:null};
+const del=async id=>{for(const k of await kids(id))await del(k.id);await deleteDoc(doc(db,'items',id))};
+
+onAuthStateChanged(auth,async u=>{
+  me=u;prof={};adm=false;
+  if(u){try{prof=(await getDoc(doc(db,'users',u.uid))).data()||{};adm=(await getDoc(doc(db,'admins',u.uid))).exists()}catch(e){}}
+  ready=true;route();
+});
+addEventListener('hashchange',route);
+
+function head(){
+  $('#hd').innerHTML=`<a class=b href="#/">টিচার্স সাপোর্ট সেন্টার</a>`+(me?`<form id=sf style="margin:0"><input id=sq placeholder="শিরোনাম খুঁজুন" style="margin:0;padding:4px 8px;width:150px"></form>`:'')+(me?
+   (adm?`<button id=tg>${edit?'শিক্ষক-দৃশ্য':'সম্পাদনা মোড'}</button><a href="#/users">শিক্ষক তালিকা</a><button id=bk>ব্যাকআপ ডাউনলোড</button>`:'')+
+   `<a href="#/me">${esc(prof.name||'প্রোফাইল')}</a><button id=lo>বের হন</button>`:'');
+  if(me){$('#sf').onsubmit=e=>{e.preventDefault();location.hash='#/s/'+encodeURIComponent($('#sq').value.trim())};$('#lo').onclick=()=>signOut(auth);if(adm){$('#tg').onclick=()=>{edit=!edit;route()};$('#bk').onclick=backup}}
+}
+
+async function route(){
+  if(!ready)return;head();
+  const h=location.hash.slice(1)||'/',a=$('#app');
+  if(h=='/admin'&&!adm)return authView(a,'admin');
+  if(!me)return authView(a,h=='/register'?'reg':'in');
+  if(h=='/me')return meView(a);
+  if(h=='/users'&&adm)return usersView(a);
+  const sm=h.match(/^\/s\/(.*)$/);if(sm)return searchView(a,decodeURIComponent(sm[1]));
+  const m=h.match(/^\/n\/(.+)$/);
+  try{await nodeView(a,m?m[1]:null)}catch(e){a.innerHTML=`<p class=err>${esc(msg(e))}</p>`}
+}
+
+// ---------- লগইন / নিবন্ধন ----------
+const F=[['name','নাম'],['inst','প্রতিষ্ঠান'],['addr','ঠিকানা'],['phone','মোবাইল নম্বর']];
+function authView(a,mode){
+  const reg=mode=='reg',ad=mode=='admin';
+  a.innerHTML=`<form class=form id=af>
+   <h1>${ad?'অ্যাডমিন লগইন':reg?'শিক্ষক নিবন্ধন':'লগইন'}</h1>
+   ${ad?'':`<div class=tabs><a href="#/" class="${reg?'':'on'}">লগইন</a><a href="#/register" class="${reg?'on':''}">নতুন নিবন্ধন</a></div>`}
+   ${reg?F.map(([k,t])=>`<label>${t}</label><input name=${k} required>`).join(''):''}
+   <label>ইমেইল</label><input name=email type=email required>
+   <label>পাসওয়ার্ড</label><input name=pw type=password minlength=6 required>
+   <div class=err id=er></div><button class=btn>${reg?'নিবন্ধন করুন':'লগইন'}</button>
+   ${reg||ad?'':`<p><a href="#" id=fp>পাসওয়ার্ড ভুলে গেছেন?</a></p>`}</form>`;
+  const f=$('#af');
+  if($('#fp'))$('#fp').onclick=async e=>{e.preventDefault();if(!f.email.value)return $('#er').textContent='আগে ইমেইল লিখুন।';
+    try{await sendPasswordResetEmail(auth,f.email.value);$('#er').textContent='রিসেট লিংক ইমেইলে পাঠানো হয়েছে।'}catch(x){$('#er').textContent=msg(x)}};
+  f.onsubmit=async e=>{e.preventDefault();$('#er').textContent='';
+    try{
+      if(reg){const c=await createUserWithEmailAndPassword(auth,f.email.value,f.pw.value);
+        prof={email:f.email.value,at:Date.now()};F.forEach(([k])=>prof[k]=f[k].value.trim());
+        await setDoc(doc(db,'users',c.user.uid),prof);head();location.hash='#/'}
+      else{await signInWithEmailAndPassword(auth,f.email.value,f.pw.value);
+        if(ad){await new Promise(r=>setTimeout(r,700));if(!adm){$('#er').textContent='এই অ্যাকাউন্ট অ্যাডমিন নয়।';signOut(auth)}else location.hash='#/'}}
+    }catch(x){$('#er').textContent=msg(x)}};
+}
+
+// ---------- প্রোফাইল ----------
+function meView(a){
+  a.innerHTML=`<form class=form id=pf><h1>আমার প্রোফাইল</h1>
+   ${F.map(([k,t])=>`<label>${t}</label><input name=${k} value="${esc(prof[k])}" required>`).join('')}
+   <label>ইমেইল</label><input value="${esc(me.email)}" disabled>
+   <div class=err id=er></div><button class=btn>সংরক্ষণ</button></form>`;
+  $('#pf').onsubmit=async e=>{e.preventDefault();const f=e.target;F.forEach(([k])=>prof[k]=f[k].value.trim());
+    try{await setDoc(doc(db,'users',me.uid),{...prof,email:me.email},{merge:true});head();$('#er').textContent='সংরক্ষিত হয়েছে।'}catch(x){$('#er').textContent=msg(x)}};
+}
+async function usersView(a){
+  const r=(await getDocs(collection(db,'users'))).docs.map(d=>d.data());
+  a.innerHTML=`<h1>নিবন্ধিত শিক্ষক (${r.length})</h1><div style="overflow-x:auto"><table><tr><th>নাম</th><th>প্রতিষ্ঠান</th><th>মোবাইল</th><th>ইমেইল</th><th>ঠিকানা</th></tr>${
+   r.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.inst)}</td><td>${esc(u.phone)}</td><td>${esc(u.email)}</td><td>${esc(u.addr)}</td></tr>`).join('')}</table></div>`;
+}
+
+// ---------- সার্চ ----------
+const memo={},gm=async id=>memo[id]||(memo[id]=await get(id));
+async function searchView(a,q){
+  a.innerHTML=`<h1>খোঁজা: ${esc(q)}</h1><p id=sr>খোঁজা হচ্ছে…</p>`;
+  if(!q)return $('#sr').textContent='কিছু লিখে খুঁজুন।';
+  const r=(await getDocs(query(collection(db,'items'),where('t','>=',q),where('t','<=',q+'\uf8ff'),limit(20)))).docs.map(d=>({id:d.id,...d.data()}));
+  const out=[];
+  for(const n of r){const c=[];let p=n;while(p&&p.p){p=await gm(p.p);if(p)c.unshift(p.t)}
+    out.push(`<div class=card><a href="#/n/${n.id}" dir=auto>${esc(n.t)}<br><small>${L[n.ty]}: ${esc(c.join(' › '))}</small></a></div>`)}
+  $('#sr').outerHTML=out.join('')||'<p>কিছু পাওয়া যায়নি। সার্চ শিরোনামের শুরু থেকে মেলে, তাই শুরুর অংশ লিখে দেখুন।</p>';
+}
+
+// ---------- কনটেন্ট ----------
+async function nodeView(a,id){
+  const n=id?await get(id):null;
+  if(id&&!n)return a.innerHTML='<p>পাওয়া যায়নি।</p>';
+  const ty=n?n.ty:'root',ct=ty=='root'?'book':T[T.indexOf(ty)+1],ed=adm&&edit;
+  let cr=[],p=n;while(p&&p.p){p=await get(p.p);if(p)cr.unshift(p)}
+  const crumb=`<div class=crumb><a href="#/">সব বই</a>${cr.map(c=>` › <a href="#/n/${c.id}">${esc(c.t)}</a>`).join('')}</div>`;
+  let body='',nav='';
+  if(ty=='tadrib'){
+    const sb=await kids(n.p),i=sb.findIndex(x=>x.id==n.id);
+    nav=`<div class=row style="margin-top:18px;justify-content:space-between">${i>0?`<a class="btn o" href="#/n/${sb[i-1].id}">‹ আগের</a>`:'<span></span>'}${i<sb.length-1?`<a class="btn o" href="#/n/${sb[i+1].id}">পরের ›</a>`:'<span></span>'}</div>`;
+    body=(n.pg?`<p class=crumb>বই: ${esc(n.pg)}</p>`:'')+(n.s||[]).filter(s=>ed||s.b?.trim()).map(s=>
+     `<div class="sec ${s.b?.trim()?'':'empty'}"><h3>${esc(s.t)}</h3><p dir=auto>${esc(s.b)||'এখনো লেখা হয়নি'}</p></div>`).join('')||'<p>এই তাদরিবের কনটেন্ট শীঘ্রই আসছে।</p>';
+  }else{
+    const k=await kids(id||'');
+    body=k.map(x=>`<div class=card><a href="#/n/${x.id}" dir=auto>${esc(x.t)}</a>${ed?`<button class=ic data-e="${x.id}" title="সম্পাদনা">✎</button><button class="ic d" data-d="${x.id}" title="মুছুন">✕</button>`:''}</div>`).join('')
+     ||`<p>এখানে এখনো কিছু যোগ করা হয়নি।</p>`;
+    if(ed)body+=`<div class=row><button class=btn id=ad>＋ নতুন ${L[ct]}</button><button class="btn o" id=im>JSON ইমপোর্ট</button></div>`;
+    a.dataset.k=JSON.stringify(k);
+  }
+  a.innerHTML=crumb+`<h1 dir=auto>${n?esc(n.t):'সব বই'}</h1>`+body+nav+(ed&&n?`<div class=row style="margin-top:16px"><button class="btn o" id=en>এটি সম্পাদনা</button></div>`:'');
+  if(!ed)return;
+  const k=JSON.parse(a.dataset.k||'[]');
+  if($('#ad'))$('#ad').onclick=()=>editor(null,id||'',ct);
+  if($('#im'))$('#im').onclick=()=>importer(id||'',ct);
+  if($('#en'))$('#en').onclick=()=>editor(n,n.p,n.ty);
+  a.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editor(k.find(x=>x.id==b.dataset.e),id||'',ct));
+  a.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{
+    if(confirm('এটি ও এর ভেতরের সবকিছু মুছে যাবে। নিশ্চিত?')){await del(b.dataset.d);route()}});
+}
+
+function editor(n,p,ty){
+  const d=$('#dlg'),s=n?.s||DEF.map(t=>({t,b:''}));
+  const sx=x=>`<div class=sx><input class=st placeholder="সেকশনের নাম" value="${esc(x.t)}" dir=auto><textarea class=sb rows=6 placeholder="কনটেন্ট" dir=auto>${esc(x.b)}</textarea><button type=button class="o" data-x>সেকশন মুছুন</button><p></p></div>`;
+  d.innerHTML=`<h2>${n?'সম্পাদনা':'নতুন'}: ${L[ty]}</h2>
+   <label>শিরোনাম</label><input id=ft value="${esc(n?.t)}" dir=auto>
+   <label>ক্রম (ছোট সংখ্যা আগে আসে)</label><input id=fo type=number value="${n?.o??''}" placeholder="খালি রাখলে শেষে যুক্ত হবে">
+   ${ty=='tadrib'?`<label>বইয়ের পৃষ্ঠা / তাদরিব নম্বর</label><input id=fp value="${esc(n?.pg)}"><div id=ss>${s.map(sx).join('')}</div><button type=button class=o id=as>＋ নতুন সেকশন</button>`:''}
+   <div class=err id=er></div><div class=row><button id=sv>সংরক্ষণ</button><button type=button class=o id=cl>বাতিল</button></div>`;
+  d.showModal();
+  d.onclick=async e=>{const t=e.target;
+    if(t.dataset.x!==undefined)t.parentElement.remove();
+    if(t.id=='as')$('#ss').insertAdjacentHTML('beforeend',sx({t:'',b:''}));
+    if(t.id=='cl')d.close();
+    if(t.id=='sv'){
+      const ti=$('#ft').value.trim();if(!ti)return $('#er').textContent='শিরোনাম লিখুন।';
+      const o={p,ty,t:ti,o:+$('#fo').value||Date.now()};
+      if(ty=='tadrib'){o.pg=$('#fp').value.trim();o.s=[...d.querySelectorAll('.sx')].map(x=>({t:x.querySelector('.st').value.trim(),b:x.querySelector('.sb').value})).filter(x=>x.t)}
+      try{n?await updateDoc(doc(db,'items',n.id),o):await addDoc(collection(db,'items'),o);d.close();route()}catch(x){$('#er').textContent=msg(x)}
+    }};
+}
+
+// ---------- ব্যাকআপ ----------
+async function backup(){
+  try{
+    const all=(await getDocs(collection(db,'items'))).docs.map(d=>({id:d.id,...d.data()})),by={};
+    all.forEach(x=>(by[x.p||'']=by[x.p||'']||[]).push(x));
+    const tree=p=>(by[p]||[]).sort((a,b)=>(a.o||0)-(b.o||0)).map((x,i)=>{
+      const o={t:x.t,o:i+1};if(x.ty=='tadrib'){o.pg=x.pg||'';o.s=x.s||[]}
+      const c=tree(x.id);if(c.length)o.c=c;return o});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(tree(''),null,1)],{type:'application/json'}));
+    a.download='backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  }catch(e){alert(msg(e))}
+}
+
+// ---------- বাল্ক ইমপোর্ট ----------
+async function flat(l,p,ty,out,fresh){
+  const ex=fresh?[]:await kids(p);
+  for(let i=0;i<l.length;i++){
+    const x=l[i],t=String(x.t||'').trim(),m=t&&ex.find(e=>String(e.t).trim()==t),
+      r=m?doc(db,'items',m.id):doc(collection(db,'items')),o={p,ty,t};
+    o.o=+x.o||(m&&m.o)||Date.now()+i;
+    if(ty=='tadrib'){
+      if(x.pg!==undefined||!m)o.pg=String(x.pg||'');
+      if(x.s||!m)o.s=(x.s||DEF.map(d=>({t:d,b:''}))).map(z=>({t:String(z.t||''),b:String(z.b||'')}));
+    }
+    out.push([r,o,!!m]);
+    if(!m&&t)ex.push({id:r.id,t,o:o.o});
+    if(x.c&&ty!='tadrib')await flat(x.c,r.id,T[T.indexOf(ty)+1],out,!m);
+  }
+}
+function importer(p,ty){
+  const d=$('#dlg');
+  d.innerHTML=`<h2>JSON ইমপোর্ট: ${L[ty]} যোগ হবে</h2><label>JSON ফাইল বাছুন, অথবা নিচে পেস্ট করুন</label><input type=file id=jf accept=".json,.txt"><textarea id=jt rows=10 dir=ltr placeholder='[{"t":"শিরোনাম","c":[...]}]'></textarea><div class=err id=er></div><div class=row><button id=go>ইমপোর্ট</button><button type=button class=o id=cl>বাতিল</button></div>`;
+  d.showModal();
+  $('#jf').onchange=async e=>{$('#jt').value=await e.target.files[0].text()};
+  d.onclick=async e=>{
+    if(e.target.id=='cl')d.close();
+    if(e.target.id!='go')return;
+    try{
+      const j=JSON.parse($('#jt').value),out=[];
+      await flat(Array.isArray(j)?j:[j],p,ty,out,false);
+      if(!out.length)throw Error('কিছু পাওয়া যায়নি');
+      if(out.some(([,o])=>!o.t))throw Error('কোনো আইটেমে শিরোনাম (t) নেই');
+      const up=out.filter(z=>z[2]).length;
+      if(!confirm((out.length-up)+' টি নতুন যোগ ও '+up+' টি আপডেট হবে। নিশ্চিত?'))return;
+      for(let i=0;i<out.length;i+=400){const b=writeBatch(db);out.slice(i,i+400).forEach(([r,o])=>b.set(r,o,{merge:true}));await b.commit()}
+      d.close();route();
+    }catch(x){$('#er').textContent='ইমপোর্ট হয়নি: '+(x instanceof SyntaxError?'JSON ফরম্যাটে ভুল আছে (কমা বা কোটেশন দেখুন)।':x.code?msg(x):x.message)}
+  };
+}
+</script></body></html>
