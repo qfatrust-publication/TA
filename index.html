@@ -1,15 +1,17 @@
 <!DOCTYPE html>
 <html lang="bn"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>টিচার্স সাপোর্ট সেন্টার</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600&family=Amiri&display=swap" rel="stylesheet">
+<title>Rihla TA</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0f5b3a"><link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600&family=Amiri&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <style>
 :root{--g:#0f5b3a;--bg:#eef3f0;--c:#fff;--t:#16241c;--m:#5b6b62;--l:#d3dfd8;--r:#a32626}
 *{box-sizing:border-box}
 body{margin:0;font:16px/1.75 'Noto Sans Bengali','Amiri',sans-serif;background:var(--bg);color:var(--t)}
 header{background:var(--g);color:#fff;padding:10px 16px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;position:sticky;top:0;z-index:5}
 header a,header button{color:#fff;font-size:14px;text-decoration:none;background:none;border:0;cursor:pointer;padding:2px 0;font-family:inherit}
-header .b{font-weight:600;font-size:17px;margin-right:auto}
+header .b{font:700 22px/1.2 'Playfair Display',Georgia,serif;letter-spacing:.02em;margin-right:auto}
+.hm{display:inline-flex;align-items:center;gap:4px}
 main{max-width:720px;margin:0 auto;padding:16px}
 .crumb{font-size:14px;color:var(--m);margin-bottom:6px}.crumb a{color:var(--g)}
 h1{font-size:23px;line-height:1.4;margin:4px 0 14px}
@@ -53,7 +55,10 @@ const DEF=['লক্ষ্য-উদ্দেশ্য','পড়ানোর 
 const ER={'auth/invalid-credential':'ইমেইল বা পাসওয়ার্ড ভুল।','auth/email-already-in-use':'এই ইমেইল আগেই নিবন্ধিত।','auth/weak-password':'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।','auth/invalid-email':'ইমেইল সঠিক নয়।','permission-denied':'এই কাজের অনুমতি নেই।'};
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const msg=e=>ER[e.code]||'সমস্যা হয়েছে: '+(e.code||e.message);
-let me=null,prof={},adm=false,edit=true,ready=false;
+let me=null,prof={},adm=false,edit=true,ready=false,ip=null;
+const HOME='<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>';
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();ip=e;if(ready)head()});
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js');
 
 const kids=async p=>(await getDocs(query(collection(db,'items'),where('p','==',p)))).docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.o||0)-(b.o||0));
 const get=async id=>{const s=await getDoc(doc(db,'items',id));return s.exists()?{id,...s.data()}:null};
@@ -67,9 +72,10 @@ onAuthStateChanged(auth,async u=>{
 addEventListener('hashchange',route);
 
 function head(){
-  $('#hd').innerHTML=`<a class=b href="#/">টিচার্স সাপোর্ট সেন্টার</a>`+(me?`<form id=sf style="margin:0"><input id=sq placeholder="শিরোনাম খুঁজুন" style="margin:0;padding:4px 8px;width:150px"></form>`:'')+(me?
+  $('#hd').innerHTML=`<a class=b href="#/">Rihla TA</a>`+(ip?'<button id=ins>ইন্সটল করুন</button>':'')+(me?`<a href="#/" class=hm>${HOME} হোম</a><form id=sf style="margin:0"><input id=sq placeholder="শিরোনাম খুঁজুন" style="margin:0;padding:4px 8px;width:150px"></form>`:'')+(me?
    (adm?`<button id=tg>${edit?'শিক্ষক-দৃশ্য':'সম্পাদনা মোড'}</button><a href="#/users">শিক্ষক তালিকা</a><button id=bk>ব্যাকআপ ডাউনলোড</button>`:'')+
    `<a href="#/me">${esc(prof.name||'প্রোফাইল')}</a><button id=lo>বের হন</button>`:'');
+  if(ip)$('#ins').onclick=()=>{ip.prompt();ip=null;head()};
   if(me){$('#sf').onsubmit=e=>{e.preventDefault();location.hash='#/s/'+encodeURIComponent($('#sq').value.trim())};$('#lo').onclick=()=>signOut(auth);if(adm){$('#tg').onclick=()=>{edit=!edit;route()};$('#bk').onclick=backup}}
 }
 
