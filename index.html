@@ -44,7 +44,7 @@ import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmail
 import{initializeFirestore,persistentLocalCache,collection,doc,getDoc,setDoc,addDoc,updateDoc,deleteDoc,getDocs,query,where,limit,writeBatch}from"https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ===== আপনার Firebase কনফিগ এখানে বসান =====
-const CFG={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT",appId:"YOUR_APP_ID"};
+const CFG={apiKey:"AIzaSyBf5VD7MB2wirmKwDff_qrYr_oMs0R1kEo",authDomain:"rihlata.firebaseapp.com",projectId:"rihlata",storageBucket:"rihlata.firebasestorage.app",messagingSenderId:"720970547582",appId:"1:720970547582:web:314422687cf9b1209d332f"};
 // =============================================
 
 const app=initializeApp(CFG),auth=getAuth(app),db=initializeFirestore(app,{localCache:persistentLocalCache()});
