@@ -15,6 +15,7 @@ header .b{font:700 22px/1.2 'Playfair Display',Georgia,serif;letter-spacing:.02e
 main{max-width:720px;margin:0 auto;padding:16px}
 .crumb{font-size:14px;color:var(--m);margin-bottom:6px}.crumb a{color:var(--g)}
 h1{font-size:23px;line-height:1.4;margin:4px 0 14px}
+h1 small,.card a small{display:block;font-size:14px;font-weight:400;color:var(--m);line-height:1.5}
 .card{display:flex;align-items:center;gap:8px;background:var(--c);border:1px solid var(--l);border-radius:8px;padding:12px 14px;margin-bottom:8px}
 .card a{flex:1;color:var(--t);text-decoration:none;font-weight:600}
 .card small{color:var(--m);font-weight:400}
@@ -54,6 +55,8 @@ const T=['book','unit','lesson','tadrib'],L={book:'বই',unit:'অধ্যা
 const DEF=['লক্ষ্য-উদ্দেশ্য','পড়ানোর কৌশল','উত্তর','সাধারণ ভুল'];
 const ER={'auth/invalid-credential':'ইমেইল বা পাসওয়ার্ড ভুল।','auth/email-already-in-use':'এই ইমেইল আগেই নিবন্ধিত।','auth/weak-password':'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।','auth/invalid-email':'ইমেইল সঠিক নয়।','permission-denied':'এই কাজের অনুমতি নেই।'};
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nk=x=>String(x||'').replace(/[\u064B-\u065F\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').trim().toLowerCase();
+const ttl=x=>`<span dir=auto>${esc(x.t)}</span>`+((x.en||x.bn)?`<small dir=auto>${[x.en,x.bn].filter(Boolean).map(esc).join(' — ')}</small>`:'');
 const msg=e=>ER[e.code]||'সমস্যা হয়েছে: '+(e.code||e.message);
 let me=null,prof={},adm=false,edit=true,ready=false,ip=null;
 const HOME='<svg width=16 height=16 viewBox="0 0 24 24" fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path d="M3 11l9-8 9 8M5 10v10h5v-6h4v6h5V10"/></svg>';
@@ -136,10 +139,13 @@ const memo={},gm=async id=>memo[id]||(memo[id]=await get(id));
 async function searchView(a,q){
   a.innerHTML=`<h1>খোঁজা: ${esc(q)}</h1><p id=sr>খোঁজা হচ্ছে…</p>`;
   if(!q)return $('#sr').textContent='কিছু লিখে খুঁজুন।';
-  const r=(await getDocs(query(collection(db,'items'),where('t','>=',q),where('t','<=',q+'\uf8ff'),limit(20)))).docs.map(d=>({id:d.id,...d.data()}));
+  const hit={};
+  for(const [f,v] of [['k',nk(q)],['ke',nk(q)],['kb',q.trim()]])
+    (await getDocs(query(collection(db,'items'),where(f,'>=',v),where(f,'<=',v+'\uf8ff'),limit(15)))).docs.forEach(d=>hit[d.id]={id:d.id,...d.data()});
+  const r=Object.values(hit).slice(0,20);
   const out=[];
   for(const n of r){const c=[];let p=n;while(p&&p.p){p=await gm(p.p);if(p)c.unshift(p.t)}
-    out.push(`<div class=card><a href="#/n/${n.id}" dir=auto>${esc(n.t)}<br><small>${L[n.ty]}: ${esc(c.join(' › '))}</small></a></div>`)}
+    out.push(`<div class=card><a href="#/n/${n.id}"><span dir=auto>${esc(n.t)}</span><small>${esc([n.en,n.bn].filter(Boolean).join(' — '))}<br>${L[n.ty]}: ${esc(c.join(' › '))}</small></a></div>`)}
   $('#sr').outerHTML=out.join('')||'<p>কিছু পাওয়া যায়নি। সার্চ শিরোনামের শুরু থেকে মেলে, তাই শুরুর অংশ লিখে দেখুন।</p>';
 }
 
@@ -158,12 +164,12 @@ async function nodeView(a,id){
      `<div class="sec ${s.b?.trim()?'':'empty'}"><h3>${esc(s.t)}</h3><p dir=auto>${esc(s.b)||'এখনো লেখা হয়নি'}</p></div>`).join('')||'<p>এই তাদরিবের কনটেন্ট শীঘ্রই আসছে।</p>';
   }else{
     const k=await kids(id||'');
-    body=k.map(x=>`<div class=card><a href="#/n/${x.id}" dir=auto>${esc(x.t)}</a>${ed?`<button class=ic data-e="${x.id}" title="সম্পাদনা">✎</button><button class="ic d" data-d="${x.id}" title="মুছুন">✕</button>`:''}</div>`).join('')
+    body=k.map(x=>`<div class=card><a href="#/n/${x.id}">${ttl(x)}</a>${ed?`<button class=ic data-e="${x.id}" title="সম্পাদনা">✎</button><button class="ic d" data-d="${x.id}" title="মুছুন">✕</button>`:''}</div>`).join('')
      ||`<p>এখানে এখনো কিছু যোগ করা হয়নি।</p>`;
     if(ed)body+=`<div class=row><button class=btn id=ad>＋ নতুন ${L[ct]}</button><button class="btn o" id=im>JSON ইমপোর্ট</button></div>`;
     a.dataset.k=JSON.stringify(k);
   }
-  a.innerHTML=crumb+`<h1 dir=auto>${n?esc(n.t):'সব বই'}</h1>`+body+nav+(ed&&n?`<div class=row style="margin-top:16px"><button class="btn o" id=en>এটি সম্পাদনা</button></div>`:'');
+  a.innerHTML=crumb+`<h1>${n?ttl(n):'সব বই'}</h1>`+body+nav+(ed&&n?`<div class=row style="margin-top:16px"><button class="btn o" id=en>এটি সম্পাদনা</button></div>`:'');
   if(!ed)return;
   const k=JSON.parse(a.dataset.k||'[]');
   if($('#ad'))$('#ad').onclick=()=>editor(null,id||'',ct);
@@ -178,7 +184,7 @@ function editor(n,p,ty){
   const d=$('#dlg'),s=n?.s||DEF.map(t=>({t,b:''}));
   const sx=x=>`<div class=sx><input class=st placeholder="সেকশনের নাম" value="${esc(x.t)}" dir=auto><textarea class=sb rows=6 placeholder="কনটেন্ট" dir=auto>${esc(x.b)}</textarea><button type=button class="o" data-x>সেকশন মুছুন</button><p></p></div>`;
   d.innerHTML=`<h2>${n?'সম্পাদনা':'নতুন'}: ${L[ty]}</h2>
-   <label>শিরোনাম</label><input id=ft value="${esc(n?.t)}" dir=auto>
+   <label>শিরোনাম (আরবি)</label><input id=ft value="${esc(n?.t)}" dir=auto><label>English title</label><input id=fe value="${esc(n?.en)}"><label>বাংলা শিরোনাম</label><input id=fb value="${esc(n?.bn)}">
    <label>ক্রম (ছোট সংখ্যা আগে আসে)</label><input id=fo type=number value="${n?.o??''}" placeholder="খালি রাখলে শেষে যুক্ত হবে">
    ${ty=='tadrib'?`<label>বইয়ের পৃষ্ঠা / তাদরিব নম্বর</label><input id=fp value="${esc(n?.pg)}"><div id=ss>${s.map(sx).join('')}</div><button type=button class=o id=as>＋ নতুন সেকশন</button>`:''}
    <div class=err id=er></div><div class=row><button id=sv>সংরক্ষণ</button><button type=button class=o id=cl>বাতিল</button></div>`;
@@ -190,6 +196,7 @@ function editor(n,p,ty){
     if(t.id=='sv'){
       const ti=$('#ft').value.trim();if(!ti)return $('#er').textContent='শিরোনাম লিখুন।';
       const o={p,ty,t:ti,o:+$('#fo').value||Date.now()};
+      o.en=$('#fe').value.trim();o.bn=$('#fb').value.trim();o.k=nk(ti);o.ke=nk(o.en);o.kb=o.bn;
       if(ty=='tadrib'){o.pg=$('#fp').value.trim();o.s=[...d.querySelectorAll('.sx')].map(x=>({t:x.querySelector('.st').value.trim(),b:x.querySelector('.sb').value})).filter(x=>x.t)}
       try{n?await updateDoc(doc(db,'items',n.id),o):await addDoc(collection(db,'items'),o);d.close();route()}catch(x){$('#er').textContent=msg(x)}
     }};
@@ -201,7 +208,7 @@ async function backup(){
     const all=(await getDocs(collection(db,'items'))).docs.map(d=>({id:d.id,...d.data()})),by={};
     all.forEach(x=>(by[x.p||'']=by[x.p||'']||[]).push(x));
     const tree=p=>(by[p]||[]).sort((a,b)=>(a.o||0)-(b.o||0)).map((x,i)=>{
-      const o={t:x.t,o:i+1};if(x.ty=='tadrib'){o.pg=x.pg||'';o.s=x.s||[]}
+      const o={t:x.t,en:x.en||'',bn:x.bn||'',o:i+1};if(x.ty=='tadrib'){o.pg=x.pg||'';o.s=x.s||[]}
       const c=tree(x.id);if(c.length)o.c=c;return o});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(tree(''),null,1)],{type:'application/json'}));
@@ -214,7 +221,9 @@ async function flat(l,p,ty,out,fresh){
   const ex=fresh?[]:await kids(p);
   for(let i=0;i<l.length;i++){
     const x=l[i],t=String(x.t||'').trim(),m=t&&ex.find(e=>String(e.t).trim()==t),
-      r=m?doc(db,'items',m.id):doc(collection(db,'items')),o={p,ty,t};
+      r=m?doc(db,'items',m.id):doc(collection(db,'items')),o={p,ty,t},
+      en=x.en!==undefined?String(x.en):(m&&m.en)||'',bn=x.bn!==undefined?String(x.bn):(m&&m.bn)||'';
+    o.en=en;o.bn=bn;o.k=nk(t);o.ke=nk(en);o.kb=bn.trim();
     o.o=+x.o||(m&&m.o)||Date.now()+i;
     if(ty=='tadrib'){
       if(x.pg!==undefined||!m)o.pg=String(x.pg||'');
